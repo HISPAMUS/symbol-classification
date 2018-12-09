@@ -127,12 +127,13 @@ if __name__ == "__main__":
     
     img_pos_width = 112
     img_pos_height  = 224
-    #K.set_image_data_format("channels_last")
+    K.set_image_data_format("channels_last")
     ###
 
     parser = argparse.ArgumentParser(description='Mensural symbol classification (trainer).')
     parser.add_argument('-corpus', dest='train_set', type=str, required=True, help='Path to the corpus file.')
     parser.add_argument('-images', dest='corpus', type=str, required=True, help='Path to the images.')
+    #parser.add_argument('-export_vocabulary', dest='vocabulary_map_file', type=str, required=True, help='Path to export the vocabulary map (integers <-> categories)')
     args = parser.parse_args()
 
     # Data preparation
@@ -141,13 +142,6 @@ if __name__ == "__main__":
     num_shapes = len(category_map)
     position_map = get_categorical_map_from_list(Y_position)
     num_positions = len(position_map)
-    
-    '''
-    print(Y_shape[0])
-    print(Y_position[0])
-    cv2.imwrite('prueba_shape.png',X_shape[0])
-    cv2.imwrite('prueba_pos.png',X_position[0])
-    '''
 
     # Training shape
     X_shape = [cv2.resize(image, (img_width, img_height)) for image in X_shape]
