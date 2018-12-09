@@ -16,10 +16,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Mensural symbol classification (predictor).')
     parser.add_argument('-image_shape',    dest='image_shape', type=str, required=True)
     parser.add_argument('-image_position', dest='image_position',    type=str, required=True)
-    parser.add_argument('-model_shape',    dest='model_shape', type=str, required=True)
-    parser.add_argument('-model_position', dest='model_position',    type=str, required=True)
-    parser.add_argument('-vocabulary_shape',    dest='vocabulary_shape', type=str, required=True)
-    parser.add_argument('-vocabulary_position', dest='vocabulary_position',    type=str, required=True)
+    parser.add_argument('-model_shape',    dest='model_shape', type=str, default='model/shape_classifier.h5')
+    parser.add_argument('-model_position', dest='model_position',    type=str, default='model/position_classifier.h5')
+    parser.add_argument('-vocabulary_shape',    dest='vocabulary_shape', type=str, default='model/category_map.npy')
+    parser.add_argument('-vocabulary_position', dest='vocabulary_position',    type=str, default='model/position_map.npy')
     args = parser.parse_args()
 
     # SHAPE
