@@ -1,96 +1,97 @@
 import argparse
 import cv2
 import numpy as np
-from keras.models import load_model
-from keras import backend as K
+from symbol_classifier import SymbolClassifier
+import flask
+import tempfile
+import os
 
-class Classifier:
-    ### Settings
-    img_height = 40
-    img_width = 40
 
-    img_pos_width = 112
-    img_pos_height = 224
+classifier = None
+app = flask.Flask(__name__)
 
-    def __init__(self, model_shape_path, model_position_path, vocabulary_shape, vocabulary_position):
-        K.set_image_data_format("channels_last")
 
-        self.model_shape = load_model(model_shape_path)
-        self.model_position = load_model(model_position_path)
+def load_page_stream(image):
+    classifier.set_page(
+        cv2.imdecode(
+            np.asarray(
+                bytearray(image.read()),
+                dtype=np.uint8
+            ),
+            -1 # No color transformation, load image "as is"
+        )
+    )
 
-        shape_vocabulary = np.load(vocabulary_shape).item()  # Category -> int
-        self.shape_vocabulary = dict((v, k) for k, v in shape_vocabulary.items())  # int -> Category
 
-        position_vocabulary = np.load(vocabulary_position).item()  # Category -> int
-        self.position_vocabulary = dict((v, k) for k, v in position_vocabulary.items())  # int -> Category
+def load_page(image):
+    page = cv2.imread(image)
+    classifier.set_page(page)
 
-    def set_page(self, page):
-        self.page = page
 
-    def predict(self, left, top, right, bottom):
-        # Shape
-        shape_image = self.page[top:bottom, left:right]
-        shape_image = [cv2.resize(shape_image, (self.img_width, self.img_height))]
-        shape_image = np.asarray(shape_image).reshape(1, self.img_height, self.img_width, 3)
-        shape_image = (255. - shape_image) / 255.
+@app.route("/page", methods=["GET", "POST", "DELETE"])
+def set_page():
+    if flask.request.method == "GET":
+        if classifier.has_page():
+            return flask.jsonify({ "success": True }), 200
+        else:
+            return flask.jsonify({ "success": False }), 404
+    elif flask.request.method == "POST":
+        if flask.request.files.get("image"):
+            #flask.request.files["image"].save(flask.request.files["image"].filename)
+            #load_page(flask.request.files["image"].filename)
+            load_page_stream(flask.request.files["image"]) # files dict contains stream-like objects (FileStorage type)
+            return flask.jsonify({ "success": True }), 200
+    elif flask.request.method == "DELETE":
+        classifier.unset_page()
+        return flask.jsonify({ "success": True }), 200
 
-        # Position [mirror effect for boxes close to the limits]
-        image_height, image_width, _  = self.page.shape
 
-        center_x = left + (right - left) / 2
-        center_y = top + (bottom - top) / 2
+@app.route("/page/prediction", methods=["POST"])
+def predict():
+    result = { "success": False }
 
-        pos_left = int(max(0, center_x - self.img_pos_width / 2))
-        pos_right = int(min(image_width, center_x + self.img_pos_width / 2))
-        pos_top = int(max(0, center_y - self.img_pos_height / 2))
-        pos_bottom = int(min(image_height, center_y + self.img_pos_height / 2))
+    if flask.request.method == "POST":
+        if not classifier.has_page():
+            result["message"] = "Page has not been loaded"
+            return flask.jsonify(result), 404
+        
+        try:
+            left = int(flask.request.form['left'])
+            top = int(flask.request.form['top'])
+            right = int(flask.request.form['right'])
+            bottom = int(flask.request.form['bottom'])
+        except ValueError as e:
+            result["message"] = "Wrong input values"
+            return flask.jsonify(result), 400
 
-        pad_left = int(abs(min(0, center_x - self.img_pos_width / 2)))
-        pad_right = int(abs(min(0, image_width - (center_x + self.img_pos_width / 2))))
-        pad_top = int(abs(min(0, center_y - self.img_pos_height / 2)))
-        pad_bottom = int(abs(min(0, image_height - (center_y + self.img_pos_height / 2))))
-
-        position_image = self.page[pos_top:pos_bottom, pos_left:pos_right]
-        position_image = np.stack(
-            [np.pad(position_image[:, :, c],
-                    [(pad_top, pad_bottom), (pad_left, pad_right)],
-                    mode='symmetric')
-             for c in range(3)], axis=2)
-
-        position_image = np.asarray(position_image).reshape(1, self.img_pos_height, self.img_pos_width, 3)
-        position_image = (255. - position_image) / 255.
-
-        # Predictions
-        shape_prediction = self.model_shape.predict(shape_image)
-        shape_prediction = np.argmax(shape_prediction)
-
-        position_prediction = self.model_position.predict(position_image)
-        position_prediction = np.argmax(position_prediction)
-
-        return self.shape_vocabulary[shape_prediction] + ':' + self.position_vocabulary[position_prediction]
+        shape, position = classifier.predict(left, top, right, bottom)
+        if shape is None or position is None:
+            return flask.jsonify(result), 404
+        
+        result["success"] = True
+        result["shape"] = shape
+        result["position"] = position
+        return flask.jsonify(result), 200
 
 
 if __name__ == "__main__":
-
     parser = argparse.ArgumentParser(description='Mensural symbol classification (predictor on the server).')
-    parser.add_argument('-image',    dest='image_shape', type=str, required=True)
-    parser.add_argument('-bounding_box', dest='bounding_box', nargs=4, type=int, required=True, help="Bounding box in the form of [left, top, right, bottom]")
     parser.add_argument('-model_shape',    dest='model_shape', type=str, default='model/shape_classifier.h5')
     parser.add_argument('-model_position', dest='model_position',    type=str, default='model/position_classifier.h5')
-    parser.add_argument('-vocabulary_shape',    dest='vocabulary_shape', type=str, default='model/category_map.npy')
+    parser.add_argument('-vocabulary_shape',    dest='vocabulary_shape', type=str, default='model/shape_map.npy')
     parser.add_argument('-vocabulary_position', dest='vocabulary_position',    type=str, default='model/position_map.npy')
+    parser.add_argument('-port', dest='port', type=int, default=8888)
     args = parser.parse_args()
 
     # Create classifier, which loads the models and the dictionary for the vocabularies
-    clf = Classifier(args.model_shape, args.model_position, args.vocabulary_shape, args.vocabulary_position)
+    classifier = SymbolClassifier(args.model_shape, args.model_position, args.vocabulary_shape, args.vocabulary_position)
 
     # Load page
-    page = cv2.imread(args.image_shape)
-    clf.set_page(page)
+    #load_page(args.image_shape)
 
     # Classify bounding box
-    prediction = clf.predict(args.bounding_box[0], args.bounding_box[1], args.bounding_box[2], args.bounding_box[3])
-    print(prediction)
+    #prediction = classifier.predict(args.bounding_box[0], args.bounding_box[1], args.bounding_box[2], args.bounding_box[3])
+    #print(prediction)
 
-
-
+    # Start server, 0.0.0.0 allows connections from other computers
+    app.run(host='0.0.0.0', port=args.port)
