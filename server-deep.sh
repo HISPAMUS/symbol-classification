@@ -7,7 +7,7 @@ ERROR=/tmp/$APP-error.log
 
 PORT=8888
 VENV="source /home/muret/venv/bin/activate"
-COMMAND="python /home/muret/symbol-classification/predict_on_server.py -port $PORT"
+COMMAND="python /home/muret/symbol-classification/server.py -port $PORT"
 
 #USR=muret
 
