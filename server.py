@@ -54,6 +54,7 @@ def predict(id):
         top = int(request.form['top'])
         right = int(request.form['right'])
         bottom = int(request.form['bottom'])
+        n = int(request.form.get('predictions', "1"))
     except ValueError as e:
         return message('Wrong input values'), 400
 
@@ -62,7 +63,7 @@ def predict(id):
     except Exception as e:
         return message('Error cropping image'), 400
 
-    shape, position = classifier.predict(shape_image, position_image)
+    shape, position = classifier.predict(shape_image, position_image, n)
     if shape is None or position is None:
         return message('Error predicting symbol'), 404
     

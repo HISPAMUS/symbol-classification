@@ -36,12 +36,20 @@ class SymbolClassifier:
         self.logger.info('Models loaded')
 
 
-    def predict(self, shape_image, position_image):
+    def predict(self, shape_image, position_image, n):
         # Predictions
-        shape_prediction = self.model_shape.predict(shape_image)
-        shape_prediction = np.argmax(shape_prediction)
+        shape_prediction_all = self.model_shape.predict(shape_image)
+        #self.logger.info(shape_prediction_all)
+        #shape_prediction = np.argmax(shape_prediction_all)
+        #self.logger.info(shape_prediction)
+        shape_prediction = np.flip(np.argsort(shape_prediction_all.flatten()))[0:n] # Equivalent to argmax returning the index of the n maxmimum values
+        #self.logger.info(shape_prediction)
 
-        position_prediction = self.model_position.predict(position_image)
-        position_prediction = np.argmax(position_prediction)
+        position_prediction_all = self.model_position.predict(position_image)
+        #self.logger.info(position_prediction_all)
+        #position_prediction = np.argmax(position_prediction_all)
+        #self.logger.info(position_prediction)
+        position_prediction = np.flip(np.argsort(position_prediction_all.flatten()))[0:n]
+        #self.logger.info(position_prediction)
 
-        return (self.shape_vocabulary[shape_prediction], self.position_vocabulary[position_prediction])
+        return ([self.shape_vocabulary[x] for x in shape_prediction], [self.position_vocabulary[x] for x in position_prediction])
